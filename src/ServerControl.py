@@ -8,10 +8,43 @@ import sys
 import json
 import subprocess
 import multiprocessing as mp
+import signal
 
 from i24_logger.log_writer import logger, catch_critical, log_errors
-logger.set_name("ServerControl")
 
+
+def dummy_function(arg1,arg2,kwarg1 = None):
+    while True:
+        logger.debug("This is what happens when you get a zombie process!")
+        time.sleep(5)
+        
+        
+        
+# CODEWRITER TODO - import your process targets here such that these functions can be directly passed as the target to mp.Process or mp.Pool
+
+# TODO - add your process targets to register_functions
+register_functions = [dummy_function]
+name_to_process = dict([(fn.__name__, fn) for fn in register_functions])
+
+
+# CODEWRTIER TODO - Change the Name to <YOUR COMPONENT> Server Control"
+logger.set_name("Server Control")
+
+
+
+
+
+
+# all processContainers have this format
+processContainer_exampele = {
+    "process": "mp.Process",
+    "command": "name of target function",
+    "timeout": 1,
+    "args": [],
+    "kwargs": {}, 
+    "group": "INGEST" or "TRACKING" or "POSTPROCESSING" or "ARCHIVE",
+    "description": "This process specifies 2 arguments, 0 keyword arguments and 0 flags at the Cluster Level. It expects 2 additional arguments and one additional keyword argument to be appended by ServerControl"
+    }
 
 
 
@@ -24,20 +57,23 @@ class ServerControl:
     4. Log any status changes
     """
     
-    
     def __init__(self,sock_port = 5999):
-        #logger.set_name("ServerControl")
 
-        self.process_lookup = {} # TODO implement this somehoww
-        self.TCP_dict = {} # which function to run for each TCP message
+        self.msg_to_fn = {
+                         "CONFIG":self.configure,
+                         "START":self.start_procs,
+                         "SOFT_STOP":self.soft_stop,
+                         "HARD_STOP":self.hard_stop,
+                         "FINISH":self.finish
+                         } # which function to run for each TCP message
         
-        self.process_list = []
+        self.name_to_process = name_to_process # which target function to use for string process name
+        
         
         
         # create socket
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        
         hostname = socket.gethostname()
         local_ip = socket.gethostbyname(hostname)
         server_address = (local_ip,sock_port)
@@ -48,65 +84,95 @@ class ServerControl:
         try:
             self.connection, self.client_address = self.sock.accept()
             logger.debug("ServerControl connected to ClusterControl at {}".format(self.client_address))
-        except:
-            self.cleanup()
-            
+        except: # I don't think this could ever really be triggered
+            self.socket_cleanup()
+        
+        # to store processContainers
+        self.process_list = []
+        
+        
+        
+        # CODEWRITER TODO - Implement any shared variables (queues etc. here)
+        # each entry is a tuple (args,kwargs) (list,dict)
+        # to be added to process args/kwargs and key is process_name
+        self.additional_args = {} 
+                                  
+        self.additional_args["dummy_function"] = ([4,5],{"kwarg1":True})
+        
+        
+        
+        
         self.main()
-        
-    def init_procs(self,msg):
-        # Wait for a connection
-        self.process_list = msg
-    
-        # start processes
-        for proc in self.process_list:
-            if proc["mode"] == "subprocess":
-                self.init_subproc(proc)
-            elif proc["mode"] == "process":
-                self.init_proc(proc)
-                
-        logger.debug("Initialized {} processes".format(len(self.process_list)))
-            
        
+        
+    #%% MESSAGE HANDLER PROCESSES
+    
+    def configure(self,msg):
+        # add each processContainer to self.process_list
+        for pC in msg[1]:
+            p_args = pC["args"]
+            p_kwargs = pC["kwargs"]
+            proc_name = pC["command"] 
+            if proc_name in self.additional_args.keys():
+                p_args += self.additional_args[proc_name][0]
+                p_kwargs = {**p_kwargs, **self.additional_arg[proc_name][1]}
             
-    def init_proc(self,proc):
+            p_target= self.name_to_process(proc_name)
+            
+            # create Process
+            pid = mp.Process(target = p_target,args = p_args,kwargs = p_kwargs)
+            
+            # add Process to process_list
+            pC["process"] = pid
+            self.process_list.append(pC)
+            
+        logger.debug("Initialized {} processes".format(len(self.process_list)))
         
-        # replace process name with actual python process
-        proc["command"] = self.process_lookup(proc["command"])
+    def start(self,msg):
+        group = msg[1]
+        count = 0
+        for pC in self.process_list:
+            if group is None or pC["group"] == group:
+                pC["process"].start()
+                count += 1
+        logger.debug("Started {} processes with group: {}".format(count,group))
+
+    def soft_stop(self,msg):
+        group = msg[1]
+        count = 0
+        for pC in self.process_list:
+            if group is None or pC["group"] == group:
+                sig = signal.SIGINT
+                os.kill(pC["process"].pid,sig)
+                count += 1
+        logger.debug("Sent signal {} to {} processes with group: {}".format(sig,count,group))
         
-        actual_process = mp.Process(target = proc["command"],args = proc["args"],kwargs = proc["kwargs"])
-        proc["process"] = actual_process
-    
-    def init_subproc(self,proc): 
-        # start subprocess
-        command = proc["command"].split(" ") #+ proc["args"]
-        print("COMMAND: {}".format(command))
-        proc["process"] = subprocess.Popen(command,shell = True)
-        
-    def proc_status_check(self): 
-        for proc in self.process_list:
-            status = proc["process"].status()
-            if status is Dead:
-                # log dead process to logger
-                logger.warning("Process {} died and is being restarted.".format(proc["command"]))
-                
-                # terminate and join process
-                
-                # remove from list
-                
-                # restart a new Process with the same command
-                
-                
-    
-    def cleanup (self): 
-        """ Close socket, log shutdown, etc"""
-        logger.debug("Cleaning up sockets")
-        self.sock.shutdown(socket.SHUT_RDWR)
-        self.sock.close()
-        self.connection.close()
+        # DEREK TODO - should add a bit more here to make sure processes close within timeout
 
         
-    def send_signal(self): pass
+    def hard_stop(self,msg):
+        group = msg[1]
+        count = 0
+        for pC in self.process_list:
+            if group is None or pC["group"] == group:
+                sig = signal.SIGKILL
+                os.kill(pC["process"].pid,sig)
+                count += 1
+        logger.debug("Sent signal {} to {} processes with group: {}".format(sig,count,group))
+        
+    def finish(self,msg):
+        group = msg[1]
+        count = 0
+        for pC in self.process_list:
+            if group is None or pC["group"] == group:
+                sig = signal.SIGUSR1
+                os.kill(pC["process"].pid,sig)
+                count += 1
+        logger.debug("Sent signal {} to {} processes with group: {}".format(sig,count,group))
+        
+        
     
+    #%% Assorted OTHER FUNCTIONS
     def recv_msg(self,timeout = 0.01):
         self.connection.settimeout(timeout)
 
@@ -116,44 +182,78 @@ class ServerControl:
         except socket.timeout:
             return None
         
+    def socket_cleanup(self): 
+        """ Close socket, log shutdown, etc"""
+        logger.debug("Cleaning up sockets")
+        self.sock.shutdown(socket.SHUT_RDWR)
+        self.sock.close()
+        self.connection.close()
+        
+    def keep_processes_alive(self): 
+        for idx,pC in enumerate(self.process_list):
+            if not pC.is_alive():
+                
+                # log dead process to logger
+                logger.warning("Process {} (PID {}) died and is being restarted.".format(pC["command"],pC["process"].pid))
+                
+                # let's make sure it's really dead, we don't want any zombies around these parts
+                pC.kill()
+                pC.join()
+                
+                # restart a new Process with the same command
+                self.restart_one(idx)
+                
+    def restart_one(self,idx):
+        pC = self.process_list[idx]
+        
+        p_args = pC["args"]
+        p_kwargs = pC["kwargs"]
+        proc_name = pC["command"] 
+        if proc_name in self.additional_args.keys():
+            p_args += self.additional_args[proc_name][0]
+            p_kwargs = {**p_kwargs, **self.additional_arg[proc_name][1]}
+        
+        p_target= self.name_to_process(proc_name)
+        
+        # create Process
+        pid = mp.Process(target = p_target,args = p_args,kwargs = p_kwargs)
+        
+        # add Process to process_list
+        pC["process"] = pid
+        self.process_list[idx] = pC
+        self.process_list[idx].start()
+        
+        logger.debug("Restarted {} process.".format(pC["command"]))
+        
+    def log_status(self):
+        pass
+        
+    
+    #%% MAIN LOOP
     @catch_critical()   
     def main(self):
-        print("Got to main")
-
+        
         while True:
             try:
                 msg = self.recv_msg()
-                
-                if msg is None:
-                    continue
-                
-                else:
-                    print(msg)
-                    
-                # parse configs from ClusterControl
-                if type(msg) == list:
-                    
-                    if len(self.process_list) > 0:
-                        logger.warning("Received new process config from ClusterControl even though ServerControl already has a set of processes to control. May result in orphaned processes.")  
-                    self.init_procs(msg)
-        
-                # parse commands from ClusterControl
-                elif type(msg) == tuple and len(msg) == 2:
+                # take action on relevant group
+                if msg is not None:
                     command = msg[0]
-                    group = msg[1]
-                    
-                    # take action on relevant group
-                    
+                    self.msg_to_fn[command](msg)
                 
-                # Keep proceses alive
+                # regular actions
+                self.keep_processes_alive()
+                self.log_status()
         
             except Exception as e:
-                if type(e).__name__ == "EOFError":
+                if type(e).__name__ == "EOFError": # occurs sometimes when socket has no message?
+                    print("Caught EOFERROR")
                     continue
                 else:
-                    self.cleanup()
+                    self.scoket_cleanup()
                     raise e
                     break
+
 
 if __name__ == "__main__":
     

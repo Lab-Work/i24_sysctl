@@ -125,13 +125,11 @@ class ClusterControl:
         :param process_config_directory - (str) directory with a json-style set of processContainers for each server
         
         processContainer = {
-            "mode"   : "subprocess" or "process",
-            "command": "terminal call" or "key to function lookup",
+            "command": "name of target function",
             "timeout": 1,
             "args": [],
             "kwargs": {}, 
-            "flags": [],
-            "group": "ingest" or "tracking" or "postprocessing" or "archive",
+            "group": "INGEST" or "TRACKING" or "POSTPROCESSING" or "ARCHIVE",
             "description": "This process specifies 2 arguments, 0 keyword arguments and 0 flags at the Cluster Level. It expects 2 additional arguments and one additional keyword argument to be appended by ServerControl"
             }
         
@@ -175,7 +173,8 @@ class ClusterControl:
     @catch_critical()
     def send_configs(self):
         for server in self.configs.keys():
-            self.sock_send(self.configs[server],server)
+            message = ("CONFIG",self.configs[server])
+            self.sock_send(message),server)
 
         logger.debug("Sent run configs to all active ServerControl modules")
         

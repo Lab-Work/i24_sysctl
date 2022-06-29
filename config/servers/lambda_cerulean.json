@@ -4,7 +4,7 @@
 "args": ["$INPUT_DIRECTORY","$START_TIMESTAMP","$END_TIMESTAMP"],
 "kwargs":{},
 "flags":[],
-"group":"tracking",
+"group":"TRACKING",
 "description":"execute.py is given 3 args and expects 0 args appended by ServerControl"
 }
 ]
