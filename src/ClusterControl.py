@@ -105,7 +105,8 @@ class ClusterControl:
             "FINISH PROCESSING"  : "less urgent graceful shutdown",
             "SOFT STOP"          : "component-implemented graceful shutdown",
             "HARD STOP"          : "default state-level process termination",
-            "CONFIG"         : "sends new run config."
+            "STOP"               : "same as soft stop",
+            "CONFIG"             : "sends new run config."
             }
       
     @catch_critical()
@@ -174,7 +175,7 @@ class ClusterControl:
     def send_configs(self):
         for server in self.configs.keys():
             message = ("CONFIG",self.configs[server])
-            self.sock_send(message),server)
+            self.sock_send(message,server)
 
         logger.debug("Sent run configs to all active ServerControl modules")
         
@@ -189,36 +190,32 @@ class ClusterControl:
         
     @catch_critical()
     def main(self):
-        print("Press ctrl+C to enter a commmand")
         while True:
-            try:
-                pass
-            except KeyboardInterrupt:
-                inp = input("Enter command or press (h) for list of valid commands: ")
-                
-                inp = inp.split(",")
-                group = None
-                if len(inp) > 1:
-                    group = inp[1]
-                inp = inp[0]
-                print(inp,group)
-                
-                if inp in ["h","H","help","HELP"]:
-                    print("Valid commands:")
-                    for key in self.cmd:
-                        print("{} : {}".format(key,self.cmd[key]))
+            inp = input("Enter command or press (h) for list of valid commands: ")
+            
+            inp = inp.split(",")
+            group = None
+            if len(inp) > 1:
+                group = inp[1]
+            inp = inp[0]
+            print(inp,group)
+            
+            if inp in ["h","H","help","HELP"]:
+                print("Valid commands:")
+                for key in self.cmd:
+                    print("{} : {}".format(key,self.cmd[key]))
 
-                elif inp == "CONFIG":
-                    self.send_configs()
-                
-                elif inp in self.cmd.keys():
-                    message = (inp,group)
-                    self.send_message(message)
-                
-                else:
-                    print("Invalid command. Re-entering waiting loop...")
-                    time.sleep(1)
-                    print("Press ctrl+C to enter a commmand")
+            elif inp == "CONFIG":
+                self.send_configs()
+            
+            elif inp in self.cmd.keys():
+                message = (inp,group)
+                self.send_message(message)
+            
+            else:
+                print("Invalid command. Re-entering waiting loop...")
+                time.sleep(1)
+                print("Press ctrl+C to enter a commmand")
                     
 
 

@@ -1,8 +1,16 @@
 [
-{"mode":"subprocess",
-"command": "conda activate derek_track_i24 ; cd /home/derek/Documents/i24/i24_track ;s python execute.py",
-"args": ["$INPUT_DIRECTORY","$START_TIMESTAMP","$END_TIMESTAMP"],
-"kwargs":{},
+{
+"command": "dummy_function",
+"args": ["$INPUT_DIRECTORY","$START_TIMESTAMP"],
+"kwargs":{"kwarg1":0},
+"flags":[],
+"group":"TRACKING",
+"description":"execute.py is given 3 args and expects 0 args appended by ServerControl"
+},
+{
+"command": "dummy_function",
+"args": ["$INPUT_DIRECTORY","$START_TIMESTAMP"],
+"kwargs":{"kwarg1":1},
 "flags":[],
 "group":"TRACKING",
 "description":"execute.py is given 3 args and expects 0 args appended by ServerControl"
