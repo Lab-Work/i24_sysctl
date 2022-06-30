@@ -1,10 +1,10 @@
 from ServerControlStub import ServerControlStub
+#from i24_sysctl import ServerControlStub
 import time
 from i24_logger.log_writer import logger
 
 
 
-# TODO - add your list of import target functions here
 # CODEWRITER TODO - import your process targets here such that these functions can be directly passed as the target to mp.Process or mp.Pool
 
 def dummy_function(arg1,arg2,kwarg1 = None):
@@ -13,7 +13,7 @@ def dummy_function(arg1,arg2,kwarg1 = None):
         logger.debug("This is what happens when you start a process!")
         time.sleep(5)
 
-# TODO - add your process targets to register_functions
+# CODEWRITER TODO - add your process targets to register_functions
 register_functions = [dummy_function]
 name_to_process = dict([(fn.__name__, fn) for fn in register_functions])
 
