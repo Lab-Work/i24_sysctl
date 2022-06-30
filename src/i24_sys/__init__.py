@@ -1,2 +1,2 @@
-from ClusterControl import ClusterControl
-from ServerControlStub import serverControl
+from .ClusterControl import ClusterControl
+from .ServerControlStub import serverControl
