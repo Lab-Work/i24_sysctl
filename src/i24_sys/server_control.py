@@ -1,5 +1,5 @@
 from ServerControlStub import ServerControlStub
-#from i24_sysctl import ServerControlStub
+#from i24_sys import ServerControlStub
 import time
 from i24_logger.log_writer import logger
 
