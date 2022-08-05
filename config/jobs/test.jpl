@@ -1,0 +1,69 @@
+[
+{
+"host": "laptop",
+"command": "normal_proc",
+"args": ["$INPUT_DIRECTORY","$START_TIMESTAMP"],
+"kwargs":{"kwarg1":0},
+"abandon": false,
+"timeout": 7.0,
+"restart_max": 5,
+"group":"TRACKING",
+"description":"Normal Process 1"
+},
+{
+"host": "compute1-tracking",
+"command": "normal_proc",
+"args": ["$INPUT_DIRECTORY","$START_TIMESTAMP"],
+"kwargs":{"kwarg1":"Zombie"},
+"abandon": false,
+"timeout": 7.0,
+"restart_max": 5,
+"group":"TRACKING",
+"description":"Normal Process Zombie"
+},
+{
+"host": "laptop",	
+"command": "rebel_proc",
+"args": ["$INPUT_DIRECTORY","$START_TIMESTAMP"],
+"kwargs":{"kwarg1":1},
+"abandon": false,
+"timeout": 20.0,
+"restart_max": 5,
+"group":"TRACKING",
+"description":"Rebel Process"
+},
+{
+"host": "laptop",
+"command": "slow_proc",
+"args": ["$INPUT_DIRECTORY","$START_TIMESTAMP"],
+"kwargs":{"kwarg1":1},
+"abandon": false,
+"timeout": 7.0,
+"restart_max": 5,
+"group":"INGEST",
+"description":"Slow Process"
+},
+{
+"host": "laptop",
+"command": "sick_proc",
+"args": ["$INPUT_DIRECTORY","$START_TIMESTAMP"],
+"kwargs":{"lifetime": 7},
+"abandon": false,
+"timeout": 7.0,
+"restart_max": 3,
+"group":"INGEST",
+"description":"Sick Process"
+},
+{
+"host": "laptop",
+"command": "simple_func",
+"args": ["$INPUT_DIRECTORY"],
+"kwargs":{"index":7},
+"abandon": false,
+"timeout": 7.0,
+"restart_max": 3,
+"group":"INGEST",
+"description":"Simple Process"
+}
+
+]

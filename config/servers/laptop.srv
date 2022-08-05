@@ -1,0 +1,8 @@
+[SETTINGS]
+name=server1
+host=127.0.0.1
+port=5999
+log_frequency=10
+
+[MODULES]
+simple_func=/mnt/c/shared/i24_sysctl/test/simple|simple
