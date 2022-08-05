@@ -38,4 +38,7 @@ class ManagedProcess(ServerControl):
 
 if __name__ == "__main__":
   
-    s = ServerControl(name_to_process)
+    s = ManagedProcess(name_to_process)
+    
+    # start server / process manager
+    s.main()

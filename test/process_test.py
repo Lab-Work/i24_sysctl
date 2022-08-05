@@ -1,4 +1,4 @@
-from ServerControlStub import ServerControl
+from i24_sys import ServerControl
 #from i24_sys import ServerControlStub
 import time
 import os
@@ -207,3 +207,4 @@ if __name__ == "__main__":
     #name_to_process['simple'] = mod_simple.__process_entry__
   
     s = TestServerControl('servers/laptop', name_to_process)
+    s.main()

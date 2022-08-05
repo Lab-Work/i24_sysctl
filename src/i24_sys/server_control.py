@@ -303,8 +303,6 @@ class ServerControl:
         # to be added to process args/kwargs and key is process_name
         self.additional_args = self.get_additional_args()
                                 
-        
-        self.main()
     
     #%% SOCKET RELATED FUNCTIONS
     #
@@ -653,8 +651,20 @@ class ServerControl:
     
     
 if __name__ == "__main__":
-  
-    s = ServerControl('servers/laptop', {})
+
+    print(sys.argv)
+
+    if len(sys.argv) == 2:
+    
+        # create server
+        s = ServerControl(sys.argv[1], {})
+        
+        # start server
+        s.main()
+        
+    else:
+    
+        print('Error: configuration not specified!') 
         
 
 
