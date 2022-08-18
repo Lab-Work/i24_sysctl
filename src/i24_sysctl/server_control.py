@@ -22,18 +22,17 @@ from i24_logger.log_writer import logger, catch_critical, log_errors
 # register_functions = [dummy_function]
 # name_to_process = dict([(fn.__name__, fn) for fn in register_functions])
 
-# all processContainers have this format
-# TODO: add PID field
+# all jobs have this format
 processContainer_exampele = {
-    "process": "mp.Process",
+    "host": "laptop",
     "command": "name of target function",
-    "timeout": 1,
     "args": [],
     "kwargs": {}, 
     "abandon": False,
-    "group": "INGEST" or "TRACKING" or "POSTPROCESSING" or "ARCHIVE",
-    "description": "This process specifies 2 arguments, 0 keyword arguments and 0 flags at the Cluster Level. It expects 2 additional arguments and one additional keyword argument to be appended by ServerControl",
-    "keep_alive":True
+    "timeout": 10.0,
+    "restart_max": 5,
+    "group": "group name e.g. TRACKING",
+    "description": "Some description to make sense to human eyes..",
     }
 
 # Managager class for 'multiprocess.Process' based processes
@@ -57,8 +56,8 @@ class ProcessMP:
         # full process parameters (internal and external)                
         self.p_target = name2proc[self.command]
         if self.command in aargs.keys():
-            self.p_args = self.e_args + aargs[self.command][0]
-            self.p_kwargs = {**self.e_kwargs, **aarg[self.command][1]}
+            self.p_args = aargs[self.command][0] + self.e_args
+            self.p_kwargs = {**aargs[self.command][1], **self.e_kwargs}
         else:
             self.p_args = self.e_args
             self.p_kwargs = self.e_kwargs 
