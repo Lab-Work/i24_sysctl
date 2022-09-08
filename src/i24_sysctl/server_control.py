@@ -521,15 +521,12 @@ class ServerControl:
     # list registered functions    
     def cmd_list_functions(self, msg):
     
-        ret = {}
-        p_list = [];
+        f_list = [];
     
         for proc in self.name_to_process:
-            p_list.append(proc)
+            f_list.append(proc)
             
-        ret['proc'] = p_list
-            
-        return (True, ret)
+        return (True, f_list)
     
     # list process groups
     def cmd_list_groups(self, msg):
@@ -539,13 +536,15 @@ class ServerControl:
     # show status of the configured processes    
     def cmd_list_status(self, msg):    
         
-        p_list = []
+        ret = {}
+        p_list = [];
         
         for proc in self.select_processes(msg[1]):
             p_list.append(proc.status())
             
+        ret['proc'] = p_list
             
-        return (True, p_list)       
+        return (True, ret)       
                     
         
     # gracefully/remotely shutdown the ServerControl
