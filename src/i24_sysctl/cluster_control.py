@@ -7,6 +7,8 @@ import os
 import sys
 import json
 import multiprocessing as mp
+import uuid
+import random
 
 from i24_logger.log_writer import logger, catch_critical
 
@@ -306,6 +308,26 @@ class ClusterControl:
         2.) hard shutdown
         
     """
+    # generate a MongoDB ObjectID like string
+    # uniques is not garanteed!
+    # https://www.mongodb.com/docs/v5.2/reference/method/ObjectId/
+    def genObjectID(self):
+        mac = uuid.getnode()
+        t = int(time.time())
+        rnd = random.randrange(65535)
+        
+        return '%08X%06X%02X' % (t, mac, rnd)
+    
+    # generate some helpful parameters, which can be used with the jobs
+    # e.g. new batch ID
+    def genHelperParams(self):
+    
+        pars = {}
+        
+        pars['OID'] = self.genObjectID()
+        
+        return pars
+        
     
     @catch_critical()
     def __init__(self):
@@ -386,9 +408,11 @@ class ClusterControl:
                 print('JPL file does not exists: ' + jpl_file)
                 return
         
+            hpars = self.genHelperParams()
+        
             # load JPL file
             # TODO: strict check?
-            pl = self.cc.process_list_from_file(jpl_file, {}, False)            
+            pl = self.cc.process_list_from_file(jpl_file, hpars, False)            
             
             # configure servers
             self.pretty_print(self.cc.configure(pl))

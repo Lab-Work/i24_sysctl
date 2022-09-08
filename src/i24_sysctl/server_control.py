@@ -521,12 +521,15 @@ class ServerControl:
     # list registered functions    
     def cmd_list_functions(self, msg):
     
+        ret = {}
         p_list = [];
     
         for proc in self.name_to_process:
             p_list.append(proc)
             
-        return (True, p_list)
+        ret['proc'] = p_list
+            
+        return (True, ret)
     
     # list process groups
     def cmd_list_groups(self, msg):
