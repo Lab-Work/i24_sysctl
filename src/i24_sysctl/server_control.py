@@ -70,6 +70,8 @@ class ProcessMP:
         self.keep_alive = False
         self.kill_time = 0
         self.start_count = 0
+        self.start_time = 0 # start time from monotonic clock
+        self.uptime = 0 # uptime from last start; updated by manage() function (time resolution: timeout) (TODO: update only on query or stop?)
         
     # start process
     def start(self):
@@ -95,6 +97,7 @@ class ProcessMP:
         self.keep_alive = True
         self.start_count += 1
         self.kill_time = 0
+        self.start_time = time.monotonic()        
         
     # finish all processing before exit    
     def finish(self):
@@ -143,6 +146,10 @@ class ProcessMP:
     
     
         if self.is_alive():
+        
+            # update uptime
+            self.uptime = round(time.monotonic() - self.start_time)
+        
             # terminate the process if needed
         
             if (self.kill_time > 0) and (self.kill_time > time.time()):
@@ -170,10 +177,13 @@ class ProcessMP:
     
         stat = {}
         
-        stat['command'] = self.command        
+        stat['command'] = self.command
+        stat['name'] = self.description
+        stat['group'] = self.group
         stat['pid'] = self.pid
         stat['start_count'] = self.start_count
         stat['alive'] = self.is_alive()
+        stat['uptime'] = self.uptime
         
         return stat
         
@@ -272,6 +282,12 @@ class ServerControl:
         
         # self main loop flag
         self.run = True
+        
+        # start time for monitoring uptime
+        self.start_time = time.monotonic()
+        
+        # counter for installed jobs; used for creating negative PID values
+        self.jobCount = 0
         
         # select for multiconnection
         self.select = selectors.DefaultSelector()
@@ -417,6 +433,10 @@ class ServerControl:
 
             # create new process object
             proc = ProcessMP(pC, self.additional_args, self.name_to_process)
+            
+            # add unique negative PID for selection
+            self.jobCount += 1
+            proc.pid = -1 * self.jobCount
         
             self.process_list.append(proc)
             print(proc)
@@ -543,6 +563,8 @@ class ServerControl:
             p_list.append(proc.status())
             
         ret['proc'] = p_list
+        
+        ret['uptime'] = round(time.monotonic() - self.start_time)
             
         return (True, ret)       
                     
