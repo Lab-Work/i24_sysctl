@@ -456,7 +456,7 @@ class ServerControl:
         count = 0
         
         # we might modify the original process_list -> use a copy for iterration
-        processes = self.select_processes(msg[1]).copy()
+        processes = self.select_processes(msg[1], False).copy()
     
         for proc in processes:
         
@@ -478,7 +478,7 @@ class ServerControl:
     
         count = 0
     
-        for proc in self.select_processes(msg[1]):
+        for proc in self.select_processes(msg[1], False):
         
             # TODO: check process state before start
         
@@ -494,7 +494,7 @@ class ServerControl:
     
         count = 0
         
-        for proc in self.select_processes(msg[1]):                    
+        for proc in self.select_processes(msg[1], False):                    
         
             # finish process
             proc.finish()
@@ -510,7 +510,7 @@ class ServerControl:
     
         count = 0
         
-        for proc in self.select_processes(msg[1]):                    
+        for proc in self.select_processes(msg[1], False):                    
         
             # stop process
             proc.stop()
@@ -526,7 +526,7 @@ class ServerControl:
     
         count = 0
         
-        for proc in self.select_processes(msg[1]):                    
+        for proc in self.select_processes(msg[1], False):                    
         
             # start process
             proc.kill()
@@ -559,7 +559,7 @@ class ServerControl:
         ret = {}
         p_list = [];
         
-        for proc in self.select_processes(msg[1]):
+        for proc in self.select_processes(msg[1], True):
             p_list.append(proc.status())
             
         ret['proc'] = p_list
@@ -589,10 +589,14 @@ class ServerControl:
                 
         logger.info("{} live processes".format(n_live),extra = to_log)
         self.last_log = time.time()
-     
-    def select_processes(self, target):
+    
+    # target: PID, group, function, all
+    # safe: True: returns all on both target==None or 'all', False: returns all only on target=='all'
+    # 'safe' should be False for dangerous operations e.g. START, STOP, KILL
+    # 'safe' can be True for harmless operations e.g. LIST_*
+    def select_processes(self, target, safe=False):
         
-        if target is None:
+        if (target=='all') or (safe and (target is None)):
             return self.process_list
             
         p_list = []

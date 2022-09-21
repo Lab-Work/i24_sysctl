@@ -175,23 +175,71 @@ class ClusterController:
         
         for name, srv in self.servers.items():
             srv.disconnect()
-        
+                
+    
+    # send command to all/selected server
+    # prefer to use command() if it is possible
     def send_command(self, command, param, server=None):
         
-        ret = {}
-        
+        ret = {}        
+               
         if server:
             # send to only one server
-        
-            pass
+            srv = self.servers.get(server)
+            
+            if srv:
+                ret[server] = srv.transaction((command, param))
             
         else:
             # send to all server
             for name, srv in self.servers.items():
                 ret[name] = srv.transaction((command, param))
                 
-                
         return ret
+        
+    # convenience function for parsing commands/parameters
+    # preferred method for interpreting/sending commands
+    def command(self, command, target):
+    
+        server = None
+        param = target # just to be sure..
+        
+        # target is a string?
+        if type(target) is str:        
+        
+            # try to separate it to server:param
+            sp = param.strip().split(':')
+            
+            
+            if len(sp) == 1:
+                # single part: some parameter or a server target
+                
+                if sp[0] in self.servers.keys():
+                    # string is a server
+                    server = sp[0]
+                    param = None
+                else:            
+                    # string is some parameter
+                    server = None
+                    param = sp[0]
+                    
+            elif len(sp) == 2:
+                # tuple: target server, parameter pair
+                server = sp[0]
+                param = sp[1]
+        
+        # try and convert param to int for PID target
+        # PID should only work with a server target to make it unambiguous
+        if server:
+            try:
+                param = int(param)
+            except:
+                pass
+                
+        #print('Command:', (command, server, param))
+    
+        # send the actual command
+        return self.send_command(command, param, server)
         
     def get_servers(self):    
         
@@ -376,18 +424,16 @@ class ClusterControl:
     # process input string list coming from shell/main loop
     def process_input(self, inp):
     
-        # clean input (strip whitespaces)
+        # clean input (strip whitespaces), possibly none
         for i in range(0, len(inp)):
             inp[i] = inp[i].strip()
         
+        cmd = inp[0]
         target = None
         if len(inp) > 1:
-            try:        
-                target = int(inp[1]) # convert to <int> if possible ...
-            except:
-                target = inp[1] # ... or just leave it as a <str>
-        cmd = inp[0]
-        #print(cmd,target)
+            target = inp[1]
+        
+        #print('Input:', (cmd, target))
         
         if cmd in ['-h', '--help', "h","H","help","HELP"]:
             print("Valid commands:")
@@ -425,8 +471,8 @@ class ClusterControl:
             self.run = False
         
         elif cmd in self.cmd_list.keys():
-            #message = (cmd,target)
-            self.pretty_print(self.cc.send_command(cmd, target))            
+            #message = (cmd,target)            
+            self.pretty_print(self.cc.command(cmd, target))            
             
         else:
             print("Invalid command.")    
@@ -447,7 +493,8 @@ class ClusterControl:
             while self.run:
                 inp = input("Enter command or type 'HELP': ")
                 
-                self.process_input(inp.split(','))
+                # get input and split on whitespaces
+                self.process_input(inp.split())
                 
         else:
             # parameters present -> shell command mode
