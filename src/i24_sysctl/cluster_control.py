@@ -67,9 +67,21 @@ class ServerClient:
                 msg = pickle.dumps(payload)
                 self.sock.sendall(msg)
                        
-                # receive and decode       
-                ret = self.sock.recv(4096)            
-                reply = pickle.loads(ret)            
+                # receive and decode
+                # TODO: proper fix for packet segmentation
+                ret_buff = b''
+                reply = None
+                while True:
+                
+                    try:
+                        ret = self.sock.recv(4096)
+                        #print('ret:', len(ret))
+                        ret_buff += ret
+                        reply = pickle.loads(ret)
+                    except Exception as e:
+                        print('Unpickle Exception:', e)
+                    finally:
+                        break
                 
                 # return with the response
                 return reply
