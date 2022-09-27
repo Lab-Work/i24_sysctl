@@ -68,20 +68,29 @@ class ServerClient:
                 self.sock.sendall(msg)
                        
                 # receive and decode
-                # TODO: proper fix for packet segmentation
+                # TODO: add proper fix for packet segmentation / limited retry
                 ret_buff = b''
                 reply = None
                 while True:
                 
                     try:
+                        # read packet
                         ret = self.sock.recv(4096)
                         #print('ret:', len(ret))
+                        
+                        # add to the currently received buffer
                         ret_buff += ret
-                        reply = pickle.loads(ret)
+                        
+                        # try to unpickle
+                        reply = pickle.loads(ret_buff)
+                        
+                        # if pickle was successful: exit the loop
+                        break
                     except Exception as e:
                         print('Unpickle Exception:', e)
-                    finally:
-                        break
+                        pass
+                        
+                #print('ret_buff', len(ret_buff))
                 
                 # return with the response
                 return reply
