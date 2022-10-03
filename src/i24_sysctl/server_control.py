@@ -393,6 +393,7 @@ class ServerControl:
                 stacktrace = traceback.format_exc()                                
                 logger.error("Unhandled exception in 'service_connection'", extra={"stacktrace":stacktrace})
                 
+                print(stacktrace)
                 print(f"Force closing connection to {data}")
                 self.select.unregister(sock)
                 sock.close()  
@@ -571,9 +572,13 @@ class ServerControl:
         
     # gracefully/remotely shutdown the ServerControl
     def cmd_shutdown(self, msg):
-        self.run = False
+    
+        # require "all" for shutdown, similar to the target selector in 'select_processes'
         
-        # TODO: kill processes???
+        if msg[1] == "all":
+            self.run = False
+        
+            # TODO: kill processes???
         
         return (True, None)
     

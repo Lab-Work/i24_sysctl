@@ -20,6 +20,7 @@ class ServerClient:
         self.host = host
         self.port = port
         
+        self.connect_timeout = 3 # connection timeout in seconds
         self.connect_max = 5
         self.connect_cnt = 0
         
@@ -35,13 +36,16 @@ class ServerClient:
             # create new socket object and connect
             #self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             #self.sock.connect((self.host, self.port))
-            self.sock = socket.create_connection((self.host, self.port))            
+            self.sock = socket.create_connection((self.host, self.port), self.connect_timeout)            
             
             # indicate success
             return True
+            
+        except socket.timeout:
+            print('Connection timeout ({}:{})'.format(self.host, self.port))
         
         except ConnectionRefusedError as e:
-            print('ConnectionRefused', e)                
+            print('Connection refused ({}:{})'.format(self.host, self.port), e)                
         
         # something went wrong, so get rid of the socket
         self.sock = None
@@ -71,8 +75,10 @@ class ServerClient:
                 # TODO: add proper fix for packet segmentation / limited retry
                 ret_buff = b''
                 reply = None
-                while True:
+                err_counter = 0
+                while err_counter < 5:
                 
+                    err_counter += 1
                     try:
                         # read packet
                         ret = self.sock.recv(4096)
@@ -171,7 +177,7 @@ class ClusterController:
             server = ServerClient(host, port)
             self.servers[name] = server
             
-        print(self.servers)
+        #print(self.servers)
         
     # get server names    
     def server_list(self):
@@ -204,7 +210,7 @@ class ClusterController:
         
         ret = {}        
                
-        if server:
+        if server is None:
             # send to only one server
             srv = self.servers.get(server)
             
@@ -493,7 +499,8 @@ class ClusterControl:
         
         elif cmd in self.cmd_list.keys():
             #message = (cmd,target)            
-            self.pretty_print(self.cc.command(cmd, target))            
+            self.pretty_print(self.cc.command(cmd, target))
+            #print(self.cc.command(cmd, target))
             
         else:
             print("Invalid command.")    
