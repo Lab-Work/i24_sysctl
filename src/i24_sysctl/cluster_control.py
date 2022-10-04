@@ -210,7 +210,7 @@ class ClusterController:
         
         ret = {}        
                
-        if server is None:
+        if server is not None:
             # send to only one server
             srv = self.servers.get(server)
             
