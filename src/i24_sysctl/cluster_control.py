@@ -210,17 +210,18 @@ class ClusterController:
         
         ret = {}        
                
-        if server is not None:
+        if server is None:
+        
+            # send to all server
+            for name, srv in self.servers.items():
+                ret[name] = srv.transaction((command, param))        
+            
+        else:
             # send to only one server
             srv = self.servers.get(server)
             
             if srv:
                 ret[server] = srv.transaction((command, param))
-            
-        else:
-            # send to all server
-            for name, srv in self.servers.items():
-                ret[name] = srv.transaction((command, param))
                 
         return ret
         
