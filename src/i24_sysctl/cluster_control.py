@@ -9,6 +9,7 @@ import json
 import multiprocessing as mp
 import uuid
 import random
+import struct
 
 from i24_logger.log_writer import logger, catch_critical
 
@@ -67,9 +68,14 @@ class ServerClient:
                 # TODO: check socket status
                 # TODO: set timeout
             
-                # encode and send
+                # encode
                 msg = pickle.dumps(payload)
-                self.sock.sendall(msg)
+                
+                # add length field for packetization
+                msg = struct.pack('!I', len(msg)) + msg                
+                
+                # send...
+                self.sock.sendall(msg)                
                        
                 # receive and decode
                 # TODO: add proper fix for packet segmentation / limited retry

@@ -12,6 +12,7 @@ import multiprocessing as mp
 import signal
 import traceback
 import importlib
+import struct
 
 from i24_logger.log_writer import logger, catch_critical, log_errors        
         
@@ -190,6 +191,69 @@ class ProcessMP:
     def __str__(self):
         return str(self.status())
     
+# helper class for recovering fragmented packets
+class Packetizer:
+    
+    def __init__(self):
+    
+        self.length = 0
+        self.data = b''
+        
+        # packet "header" format:
+        # length (uint32, network order, big-endian)
+        self.header = struct.Struct('!I')
+        
+    def read(self, sock):
+    
+        # new packet?
+        if self.length == 0:
+        
+            # reset data buffer
+            self.data = b''
+            
+            # read length from wire
+            buff = sock.recv(4)            
+            
+            # connection closed or some problem...
+            if len(buff) != 4:
+                return None
+            
+            # get length
+            length = self.header.unpack(buff)[0]            
+            
+            # limit sensible packet sizes to 32K
+            if length > 32768:
+                raise ValueError('Unexpected packet size: {} bytes'.format(length))
+                
+            # store packet length
+            self.length = length
+            
+    
+        # calculate remaining length
+        diff = self.length - len(self.data)
+        
+        # receive data
+        buff = sock.recv(diff)
+        
+        # connection closed, no more bytes, or some problem..
+        if len(buff) == 0:
+            return None
+        
+        # add to buffer
+        self.data += buff
+        
+        # packet complete?
+        if len(self.data) >= self.length:
+            
+            # signal new packet for next receive
+            self.length = 0
+            
+            # packet complete!
+            return True
+            
+        # packet incomplete :(    
+        return False
+        
 
 class ServerControl:
     """
@@ -329,29 +393,41 @@ class ServerControl:
         conn, addr = sock.accept()  # Should be ready to read
         print(f"Accepted connection from {addr}")
         conn.setblocking(False)
-        #data = types.SimpleNamespace(addr=addr, inb=b"", outb=b"")
-        data = f"Client {addr}"
-        print("Data", data)
-        self.select.register(conn, selectors.EVENT_READ, data=data)
+        #data = types.SimpleNamespace(addr=addr, inb=b"", outb=b
         
-        print('Select:', self.select.get_map())
-        for key, val in self.select.get_map().items():
-            print('Map:', key, val.fileobj)   
+        # make/assign a Packetizer for this connection
+        packet = Packetizer()
+        #print("Data", data)
+        self.select.register(conn, selectors.EVENT_READ, data=packet)
+        
+        #print('Select:', self.select.get_map())
+        #for key, val in self.select.get_map().items():
+        #    print('Map:', key, val.fileobj)   
             
             
     # socket event: handle new data
     def service_connection(self, sel, mask):
         sock = sel.fileobj
-        data = sel.data
+        packet = sel.data # Packetizer for this connection
+
         if mask & selectors.EVENT_READ:
         
             try:
-                recv_data = sock.recv(1024)  # Should be ready to read
-                if recv_data:
-                    #print("Received:", recv_data)
+                
+                # data should be ready to read at this point
+                
+                # read from socket
+                ret = packet.read(sock)                
+                
+                # read succesful?
+                if ret is not None:
+                    
+                    # need more data..
+                    if ret == False:
+                        return
                     
                     # decode message
-                    msg = pickle.loads(recv_data)
+                    msg = pickle.loads(packet.data)
                     cmd = msg[0]
                     
                     # default error message
@@ -382,7 +458,7 @@ class ServerControl:
                 else:
                     # socket closed by client..
                     # cleanup time
-                    print(f"Closing connection to {data}")
+                    print("Closing connection to {}".format(sock.getpeername()))
                     self.select.unregister(sock)
                     sock.close()  
             
@@ -394,7 +470,7 @@ class ServerControl:
                 logger.error("Unhandled exception in 'service_connection'", extra={"stacktrace":stacktrace})
                 
                 print(stacktrace)
-                print(f"Force closing connection to {data}")
+                print("Force closing connection to {}".format(sock.getpeername()))
                 self.select.unregister(sock)
                 sock.close()  
             
