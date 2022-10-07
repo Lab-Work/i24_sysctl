@@ -194,16 +194,33 @@ class ProcessMP:
 # helper class for recovering fragmented packets
 class Packetizer:
     
-    def __init__(self):
+    def __init__(self, sock):
     
         self.length = 0
         self.data = b''
+        self.sock = sock
         
         # packet "header" format:
         # length (uint32, network order, big-endian)
         self.header = struct.Struct('!I')
         
-    def read(self, sock):
+    def write(self, msg):
+    
+        # add length field for packetization
+        msg = self.header.pack(len(msg)) + msg  
+        
+        #msg = bytearray(msg)
+        #msg[0] = 127
+        
+        # send back response                                        
+        self.sock.sendall(msg)     
+        
+    # receive packet from socket:
+    # return True: full packet received
+    # return False: packet is incomplete (more data needed)
+    # return None: connection closed
+    # raise ValueError: invalid packet/header size (possibly corrupted byte stream)
+    def read(self):
     
         # new packet?
         if self.length == 0:
@@ -211,12 +228,18 @@ class Packetizer:
             # reset data buffer
             self.data = b''
             
-            # read length from wire
-            buff = sock.recv(4)            
+            # TODO: potential bug: header can be also segmented (unlikely)
             
-            # connection closed or some problem...
+            # read header (length) from wire
+            buff = self.sock.recv(4)            
+            
+            # connection closed?
+            if len(buff) == 0:
+                return None                                
+
+            # check header size
             if len(buff) != 4:
-                return None
+                raise ValueError('Invalid header size: {} bytes'.format(len(buff)))
             
             # get length
             length = self.header.unpack(buff)[0]            
@@ -233,7 +256,7 @@ class Packetizer:
         diff = self.length - len(self.data)
         
         # receive data
-        buff = sock.recv(diff)
+        buff = self.sock.recv(diff)
         
         # connection closed, no more bytes, or some problem..
         if len(buff) == 0:
@@ -396,9 +419,10 @@ class ServerControl:
         #data = types.SimpleNamespace(addr=addr, inb=b"", outb=b
         
         # make/assign a Packetizer for this connection
-        packet = Packetizer()
+        packet = Packetizer(conn)
+        data = {'packet': packet, 'address': addr}
         #print("Data", data)
-        self.select.register(conn, selectors.EVENT_READ, data=packet)
+        self.select.register(conn, selectors.EVENT_READ, data=data)
         
         #print('Select:', self.select.get_map())
         #for key, val in self.select.get_map().items():
@@ -408,7 +432,8 @@ class ServerControl:
     # socket event: handle new data
     def service_connection(self, sel, mask):
         sock = sel.fileobj
-        packet = sel.data # Packetizer for this connection
+        packet = sel.data['packet'] # Packetizer for this connection
+        address = sel.data['address'] # peer address
 
         if mask & selectors.EVENT_READ:
         
@@ -417,7 +442,7 @@ class ServerControl:
                 # data should be ready to read at this point
                 
                 # read from socket
-                ret = packet.read(sock)                
+                ret = packet.read()                
                 
                 # read succesful?
                 if ret is not None:
@@ -449,16 +474,16 @@ class ServerControl:
                         # error message
                         reply = (False, "Unsupported command '%s'" % cmd)
                     
-                    # send back response
-                    sock.sendall(pickle.dumps(reply))
+                    # encode reply
+                    msg = pickle.dumps(reply)
                     
-                    # echo
-                    #sock.send(recv_data)
+                    # send reply
+                    packet.write(msg)                    
                     
                 else:
                     # socket closed by client..
                     # cleanup time
-                    print("Closing connection to {}".format(sock.getpeername()))
+                    print("Closing connection to {}".format(address))
                     self.select.unregister(sock)
                     sock.close()  
             
@@ -470,7 +495,7 @@ class ServerControl:
                 logger.error("Unhandled exception in 'service_connection'", extra={"stacktrace":stacktrace})
                 
                 print(stacktrace)
-                print("Force closing connection to {}".format(sock.getpeername()))
+                print("Force closing connection to {}".format(address))
                 self.select.unregister(sock)
                 sock.close()  
             

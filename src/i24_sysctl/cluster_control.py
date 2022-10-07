@@ -27,10 +27,17 @@ class ServerClient:
         
         self.sock = None
         
+        self.data = b'' # packet data buffer
+        
+        # packet "header" format:
+        # length (uint32, network order, big-endian)
+        self.header = struct.Struct('!I')
+        
     def connect(self):
     
         # reconnection?
         if self.sock is not None:
+            print('Close previous socket')
             self.sock.close()
             
         try:    
@@ -55,6 +62,55 @@ class ServerClient:
         return False
         
         
+    def _reconnect(self):
+        # try to reconnect
+        self.connect_cnt += 1
+        if self.connect_cnt <= self.connect_max:
+            print('Reconect {}/{}'.format(self.connect_cnt, self.connect_max))
+            self.connect()
+            return True
+        else:
+            print('Connection lost...')        
+            return False
+        
+    def read(self):
+    
+        # read length from wire
+        buff = self.sock.recv(4)            
+        
+        # connection closed or some problem...
+        if len(buff) != 4:
+            return False
+        
+        # get length
+        length = self.header.unpack(buff)[0]            
+        
+        # limit sensible packet sizes to 32K
+        if length > 32768:
+            raise ValueError('Unexpected packet size: {} bytes'.format(length))
+        
+        # reset data buffer
+        self.data = b''
+        
+        # read until all data received
+        while len(self.data) < length:
+        
+            # calculate remaining length
+            diff = length - len(self.data)
+            
+            # receive data
+            buff = self.sock.recv(diff)
+            
+            # connection closed, no more bytes, or some problem..
+            if len(buff) == 0:
+                return False
+            
+            # add to buffer
+            self.data += buff
+        
+        # all data received
+        return True
+        
     # command-reply transaction (without structure)    
     def transaction(self, payload):    
             
@@ -72,37 +128,21 @@ class ServerClient:
                 msg = pickle.dumps(payload)
                 
                 # add length field for packetization
-                msg = struct.pack('!I', len(msg)) + msg                
+                msg = self.header.pack(len(msg)) + msg
                 
                 # send...
                 self.sock.sendall(msg)                
                        
-                # receive and decode
-                # TODO: add proper fix for packet segmentation / limited retry
-                ret_buff = b''
-                reply = None
-                err_counter = 0
-                while err_counter < 5:
+                # receive packet
+                ret = self.read()
                 
-                    err_counter += 1
-                    try:
-                        # read packet
-                        ret = self.sock.recv(4096)
-                        #print('ret:', len(ret))
-                        
-                        # add to the currently received buffer
-                        ret_buff += ret
-                        
-                        # try to unpickle
-                        reply = pickle.loads(ret_buff)
-                        
-                        # if pickle was successful: exit the loop
-                        break
-                    except Exception as e:
-                        print('Unpickle Exception:', e)
-                        pass
-                        
-                #print('ret_buff', len(ret_buff))
+                # successful reading?
+                if ret == False:
+                    # report error
+                    return None
+                    
+                # decode reply
+                reply = pickle.loads(self.data)
                 
                 # return with the response
                 return reply
@@ -111,24 +151,22 @@ class ServerClient:
                 print('BokenPipe', e)                
                 
                 # try to reconnect
-                retry_cnt += 1
-                if retry_cnt <= retry_max:
-                    print('Reconect {}/{}'.format(retry_cnt, retry_max))
-                    self.connect()
-                else:
-                    print('Connection lost...')
+                if not self._reconnect():
                     break
                 
             except EOFError:
                 print('Socket unexpecedly closed')
                 
                 # try to reconnect
-                retry_cnt += 1
-                if retry_cnt <= retry_max:
-                    print('Reconect {}/{}'.format(retry_cnt, retry_max))
-                    self.connect()
-                else:
-                    print('Connection lost...')
+                if not self._reconnect():
+                    break
+                    
+            except Exception as e:
+                
+                print("Unhandled exception in 'transaction': {} {}".format(type(e), e))
+                
+                # try to reconnect
+                if not self._reconnect():
                     break
             
         # indicate the error    
