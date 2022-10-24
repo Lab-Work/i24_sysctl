@@ -13,6 +13,7 @@ import signal
 import traceback
 import importlib
 import struct
+import math
 
 from i24_logger.log_writer import logger, catch_critical, log_errors        
         
@@ -32,6 +33,10 @@ processContainer_exampele = {
     "abandon": False,
     "timeout": 10.0,
     "restart_max": 5,
+    "time_threshold": 15,
+    "time_base": 5,
+    "time_max": 30,
+    "time_mult": 2,
     "group": "group name e.g. TRACKING",
     "description": "Some description to make sense to human eyes..",
     }
@@ -64,41 +69,58 @@ class ProcessMP:
             self.p_kwargs = self.e_kwargs 
 
         # process management policies
-        self.timeout = pC['timeout']
-        self.restart_max = pC['restart_max']        
+        # restart delay = restart_count * time_mult + time_base, if uptime < time_threshold
+        # restart delay = 0, if uptime > time_threshold
+        self.timeout = pC['timeout'] # wait time before terminating a process (stop -> kill)                
+        self.restart_max = pC['restart_max'] # maximum number of restart after without a "successful" run
+        self.time_threshold = pC['time_threshold'] # uptime to declare a run successful
+        self.time_base = pC['time_base'] # minimum wait time for restart
+        self.time_max = pC['time_max'] # maximum wait time for restart
+        self.time_mult = pC['time_mult'] # time multiplier for restart
+        
         
         # process management variables
         self.keep_alive = False
         self.kill_time = 0
         self.start_count = 0
+        self.restart_count = 0
         self.start_time = 0 # start time from monotonic clock
         self.uptime = 0 # uptime from last start; updated by manage() function (time resolution: timeout) (TODO: update only on query or stop?)
+        self.delay_time = 0 # wait before restart
+        self.last_alive = 0 # time when the process was last alive; updated by manage() function (time resolution: timeout) (TODO: update only on query or stop?)
+        self.wait = 0 # remaining time for restart, only for status
         
     # start process
-    def start(self):
+    def start(self, clean=False):
     
-        # TODO: check process state / hande exception for process.close()
+        # TODO: check process state / hande exception for process.close()               
         
         # have previous process?
         if self.process:
             self.process.close()
         
         # create Process
-        self.process = mp.Process(target = self.p_target,args = self.p_args,kwargs = self.p_kwargs, daemon = self._daemon)
+        self.process = mp.Process(target = self.p_target,args = self.p_args,kwargs = self.p_kwargs, daemon = self._daemon)        
         
-        self.keep_alive = True
+        # reset values if this is a clean start (by the user / successful run)
+        if clean:
+            self.keep_alive = True
+            self.restart_count = 0
+            self.delay_time = self.time_base
+        
+        # process management
+        self.start_count += 1
+        self.kill_time = 0
+        self.start_time = time.monotonic()
+        self.wait = 0
         
         # start process
         self.process.start()
         
         # store PID
-        self.pid = self.process.pid
-        
-        # process management
-        self.keep_alive = True
-        self.start_count += 1
-        self.kill_time = 0
-        self.start_time = time.monotonic()        
+        self.pid = self.process.pid  
+
+        logger.info('Start {}'.format(self.description), extra={})        
         
     # finish all processing before exit    
     def finish(self):
@@ -119,7 +141,7 @@ class ProcessMP:
     
         # process management
         self.keep_alive = False
-        self.kill_time = time.time() + self.timeout
+        self.kill_time = time.monotonic() + self.timeout
     
         if self.is_alive():
         
@@ -145,22 +167,73 @@ class ProcessMP:
     # call this method periodically to manage the process (keep alive / terminate / etc.)
     def manage(self):
     
+        now = time.monotonic()
     
         if self.is_alive():
-        
-            # update uptime
-            self.uptime = round(time.monotonic() - self.start_time)
+                            
+            # update time stats
+            self.uptime = now - self.start_time            
+            
+            # update last alive
+            self.last_alive = now
         
             # terminate the process if needed
         
-            if (self.kill_time > 0) and (self.kill_time > time.time()):
+            if (self.kill_time > 0) and (self.kill_time > now):
                 self.kill()
         
         else:        
             # resurrect the process if needed
             
-            if self.keep_alive and self.start_count <= self.restart_max:
-                self.start()
+            if self.keep_alive:
+                
+                if self.uptime < self.time_threshold:
+                    # last run was a failure
+                
+                    if self.restart_count < self.restart_max:
+                        # try to restart the process after some wait period
+                        
+                        # calculate remaining wait time
+                        self.wait = (self.last_alive + self.delay_time) - now
+                        
+                        # wait time elapsed?
+                        if self.wait <= 0:
+                            self.restart_count += 1
+                            
+                            # compute next delay time
+                            self.delay_time = self.restart_count * self.time_mult + self.time_base
+                            
+                            # maximize wait time
+                            if self.delay_time > self.time_max:
+                                self.delay_time = self.time_max
+                                
+                            # clear wait indicator
+                            self.wait = 0
+                                
+                            # start the process again    
+                            self.start()
+                    
+                    else:
+                        # process failed too many times...
+                        #print('Process failed too many times', self.description)
+                        
+                        # do not try to resurrect the process anymore...
+                        self.keep_alive = False
+                        
+                        # clear wait indicator
+                        self.wait = 0                
+                
+                else:                
+                    # last run was successful
+                    print('Run was successful', self.description)
+
+                    # reset restart count, delay time, wait time
+                    self.restart_count = 0
+                    self.delay_time = self.time_base
+                    self.wait = 0
+                    
+                    # start immediately
+                    self.start(clean=True)
             
         
             
@@ -176,7 +249,7 @@ class ProcessMP:
     # retrieve status information (dictionary)
     def status(self):
     
-        stat = {}
+        stat = {}                
         
         stat['command'] = self.command
         stat['name'] = self.description
@@ -184,7 +257,8 @@ class ProcessMP:
         stat['pid'] = self.pid
         stat['start_count'] = self.start_count
         stat['alive'] = self.is_alive()
-        stat['uptime'] = self.uptime
+        stat['uptime'] = round(self.uptime) # no need for precision
+        stat['wait'] = math.ceil(self.wait) # no need for precision
         
         return stat
         
@@ -444,7 +518,7 @@ class ServerControl:
                 # read from socket
                 ret = packet.read()                
                 
-                # read succesful?
+                # read successful?
                 if ret is not None:
                     
                     # need more data..
@@ -582,11 +656,10 @@ class ServerControl:
     
         for proc in self.select_processes(msg[1], False):
         
-            # TODO: check process state before start
-        
-            # start process
-            proc.start()
-            count += 1
+            # start process        
+            if not proc.is_alive():                        
+                proc.start(clean=True)
+                count += 1
             
         logger.debug("Started {} processes with target: {}".format(count, msg[1]))
 
@@ -758,7 +831,7 @@ class ServerControl:
             print(name)
 
         while self.run:
-            events = self.select.select(timeout=2)
+            events = self.select.select(timeout=1)
             if events:          
                 for sel, mask in events:
                     if sel.data is None:

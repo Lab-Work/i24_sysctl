@@ -169,7 +169,7 @@ class ExplodingProcess:
         timeout = time.time() + self.life
     
         while self.run and timeout > time.time():
-            print('Exploding process, remaining {}...'.format(timeout- time.time()))
+            print('Exploding process, remaining {}...'.format(round(timeout- time.time(), 2)))
             time.sleep(5)  
             
         print('Explosion (PID={})!'.format(os.getpid())) 
