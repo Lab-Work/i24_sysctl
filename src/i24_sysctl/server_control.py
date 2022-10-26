@@ -112,6 +112,7 @@ class ProcessMP:
         self.start_count += 1
         self.kill_time = 0
         self.start_time = time.monotonic()
+        self.last_alive = self.start_time
         self.wait = 0
         
         # start process
