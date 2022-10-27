@@ -258,6 +258,7 @@ class ProcessMP:
         stat['pid'] = self.pid
         stat['start_count'] = self.start_count
         stat['alive'] = self.is_alive()
+        stat['keep_alive'] = self.keep_alive
         stat['uptime'] = round(self.uptime) # no need for precision
         stat['wait'] = math.ceil(self.wait) # no need for precision
         
