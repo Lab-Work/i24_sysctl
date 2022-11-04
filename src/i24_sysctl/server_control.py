@@ -14,9 +14,12 @@ import traceback
 import importlib
 import struct
 import math
+import warnings
 
 from i24_logger.log_writer import logger, catch_critical, log_errors        
         
+# suppress warnings        
+warnings.filterwarnings("once", category=RuntimeWarning)        
         
 # CODEWRITER TODO - import your process targets here such that these functions can be directly passed as the target to mp.Process or mp.Pool
 
@@ -113,6 +116,7 @@ class ProcessMP:
         self.kill_time = 0
         self.start_time = time.monotonic()
         self.last_alive = self.start_time
+        self.uptime = 0
         self.wait = 0
         
         # start process
